@@ -5,6 +5,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
 import datetime
 from functools import wraps
+from tmdbv3api import TMDb, Movie
+
+
 
 app = Flask(__name__)
 
@@ -12,16 +15,29 @@ app.config['SECRET_KEY'] = 'thisissecret'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///movies.db'
 
 db = SQLAlchemy(app)
+tmdb = TMDb()
+tmdb.api_key = '31983801561a84bd8ebd7fe2ac3e4685'
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key = True)
     username = db.Column(db.String(50))
     password = db.Column(db.String(80))
-    email = db.Column(db.String(80))
+    email = db.Column(db.String(80),nullable=True)
     admin = db.Column(db.Boolean)
-    bio = db.Column(db.String(50))
-    must_watch = db.Column(db.String(50))
+    bio = db.Column(db.String(50),nullable=True)
+    must_watch = db.Column(db.String(50), nullable=True)
     public_id = db.Column(db.String(50), unique = True)
+    user_movie_id = db.Column(db.Integer, nullable=True)
+    user_title = db.Column(db.String(150),nullable=True)
+    user_overview = db.Column(db.String(1000),nullable=True)
+    user_rate = db.Column(db.String(50),nullable=True)
+
+
+class Movie_db(db.Model):
+    movie_id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(150))
+    overview = db.Column(db.String(1000))
+    rate = db.Column(db.String(50))
 
 def token_required(f):
     """
@@ -69,7 +85,7 @@ def register_user():
 @app.route('/login')
 def login():
     """
-    Generates token and logs the user in then returns token :) no black magic here, move on....
+    Generates token and logs the user in then returns token 
     """
     auth = request.authorization 
 
@@ -117,8 +133,8 @@ def get_all_users(current_user): #ADMIN ONLY
     gets all users data, ADMIN ONLY
     Just so we can see the userbase we are working with here 
     """
-    if not current_user.admin:
-        return jsonify({'message':'insufficient Admin privelleges'})
+    #if not current_user.admin:
+    #    return jsonify({'message':'insufficient Admin privelleges'})
     
     users = User.query.all()
     output = [] 
@@ -133,6 +149,64 @@ def get_all_users(current_user): #ADMIN ONLY
         user_data['bio']=user.bio
         output.append(user_data)
     return jsonify({'users':output})
+
+
+@app.route('/movie', methods=['POST'])
+def add_movies():
+    """
+    This endpoint "feeds" data directly to my database from TMDb API 
+    to automate the process we go through a range of movie IDs (eg:from 1 to 500) and save their data respectively  
+    """
+    movie = Movie()
+    movieid=300
+    movies = []
+    #popular = movie.popular()
+    while movieid <= 320:
+        movieid = movieid + 1   
+        popular = movie.details(movieid)
+        #if not popular.title:
+        #    movieid = movieid + 1
+        #else:
+        popular = movie.details(movieid)
+        print(movieid)
+        new_movie = Movie_db(movie_id = movieid, title= popular.title, overview = popular.overview, rate = popular.vote_average)
+        movies.append({'id': movieid,'title':popular.title, 'overview':popular.overview, 'rate':popular.vote_average}) 
+        db.session.add(new_movie)
+        db.session.commit()
+    return jsonify({'movies':movies})    
+
+@app.route('/movie',methods = ['GET'])
+def display_movies():
+    """
+    Displays all the data entered by the above endpoint
+    """
+    movie_list = Movie_db.query.all()
+    movies = []
+    for movie in movie_list:
+        movies.append({'id': movie.movie_id, 'title': movie.title, 'overview':movie.overview, 'rate':movie.rate})
+
+    return jsonify({'movies':movies})
+
+@app.route('/user/<public_id>/movies', methods = ['PUT'])
+def add_user_movies(public_id):
+    """
+    User has the option to search the database using movie title, the movie is automatically added to their list
+    User also has the option to pass a "rating" for the movie in this endpoint
+    """
+    data = request.get_json()
+    user_movie = Movie_db.query.filter_by(title = data['title']).first()
+    print(user_movie.movie_id)
+    print(user_movie.title)
+    print(user_movie.overview)
+    print(user_movie.rate)
+    user = User.query.filter_by(public_id = public_id).first()
+    user.user_movie_id = user_movie.movie_id 
+    user.user_overview = user_movie.overview
+    user.user_rate = data['rating']
+    user.user_title = user_movie.title
+    db.session.commit()
+    return jsonify({'message': 'User Information has been updated successfully'}), 201
+
 
 
 
