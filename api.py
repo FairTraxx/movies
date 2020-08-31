@@ -6,7 +6,10 @@ import jwt
 import datetime
 from functools import wraps
 from tmdbv3api import TMDb, Movie
-
+import ssl
+import urllib.request as req
+import json
+import requests
 
 
 app = Flask(__name__)
@@ -17,27 +20,28 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///movies.db'
 db = SQLAlchemy(app)
 tmdb = TMDb()
 tmdb.api_key = '31983801561a84bd8ebd7fe2ac3e4685'
+base_url = "https://api.themoviedb.org/3/discover/movie/?api_key="+tmdb.api_key
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key = True)
     username = db.Column(db.String(50))
     password = db.Column(db.String(80))
-    email = db.Column(db.String(80),nullable=True)
+    email = db.Column(db.String(80))
     admin = db.Column(db.Boolean)
     bio = db.Column(db.String(50),nullable=True)
     must_watch = db.Column(db.String(50), nullable=True)
     public_id = db.Column(db.String(50), unique = True)
-    user_movie_id = db.Column(db.Integer, nullable=True)
-    user_title = db.Column(db.String(150),nullable=True)
-    user_overview = db.Column(db.String(1000),nullable=True)
-    user_rate = db.Column(db.String(50),nullable=True)
 
-
-class Movie_db(db.Model):
-    movie_id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(150))
+class Movie(db.Model): #this is the movie model which acts as the user's personal list of movies and their data
+    id = db.Column(db.Integer, primary_key = True)
+    title = db.Column(db.String(50))
     overview = db.Column(db.String(1000))
-    rate = db.Column(db.String(50))
+    poster = db.Column(db.String(50))
+    vote_average = db.Column(db.String(20))
+    vote_count = db.Column(db.String(20))
+    user_rating = db.Column(db.String(20))
+    user_id = db.Column(db.Integer, db.ForeignKey('user.public_id'))
+
 
 def token_required(f):
     """
@@ -132,8 +136,8 @@ def get_all_users(current_user): #ADMIN ONLY
     gets all users data, ADMIN ONLY
     Just so we can see the userbase we are working with here 
     """
-    if not current_user.admin:
-        return jsonify({'message':'insufficient Admin privelleges'})
+    #if not current_user.admin:
+    #    return jsonify({'message':'insufficient Admin privelleges'})
     
     users = User.query.all()
     output = [] 
@@ -151,77 +155,87 @@ def get_all_users(current_user): #ADMIN ONLY
 
 #Movie endpoints
 
-@app.route('/movie', methods=['POST'])
-@token_required
-def add_movies(current_user):
+@app.route('/discover', methods = ['GET'])
+def tmdb_movies():
     """
-    This endpoint "feeds" data directly to my database from TMDb API 
-    to automate the process we go through a range of movie IDs (eg:from 1 to 500) and save their data respectively 
-    The user has two options to add movies either from my database or from directly searching TMBd API for all movies there 
+    Displays over 10k movie results from tmdb
+    (Authentication not required)
     """
-    movie = Movie()
-    movieid=300  #sets a starting point to the range of movie IDs i will be adding from
-    movies = []
-    #popular = movie.popular()
-    while movieid <= 320:  #movieIDs ending points
-        movieid = movieid + 1   #increments counter
-        popular = movie.details(movieid) #grabs movie details from TMDb
-        #if not popular.title:
-        #    movieid = movieid + 1 #sometimes no movie exists for the given ID on TMDb's database
-        #else:
-        popular = movie.details(movieid)
-        #print(movieid)
-        new_movie = Movie_db(movie_id = movieid, title= popular.title, overview = popular.overview, rate = popular.vote_average)
-        movies.append({'id': movieid,'title':popular.title, 'overview':popular.overview, 'rate':popular.vote_average}) 
-        db.session.add(new_movie)  # Saves my movies list to the database
-        db.session.commit()  
-    return jsonify({'movies':movies})    
+    ssl._create_default_https_context = ssl._create_unverified_context
+    connection = req.urlopen(base_url) 
+    data = json.loads(connection.read())
+    movie_results_list = data['results']
 
-@app.route('/movie',methods = ['GET'])
-def display_movies():
-    """
-    Displays all the data entered by the above endpoint
-    """
-    movie_list = Movie_db.query.all()
-    movies = []
-    for movie in movie_list:
-        movies.append({'id': movie.movie_id, 'title': movie.title, 'overview':movie.overview, 'rate':movie.rate})
+    return jsonify({'Discover Movies': movie_results_list})
 
-    return jsonify({'movies':movies})
 
-@app.route('/user/<public_id>/movies', methods = ['POST'])
-def add_user_movies(public_id):
+@app.route('/search', methods = ['POST'])
+def search_movie():
     """
-    User has the option to search our own database using movie title, the movie is automatically added to their list
-    User also has the option to pass a "rating" for the movie in this endpoint for the given movie
+    Search for the name of a movie from TMDb database 
     """
     data = request.get_json()
-    user_movie = Movie_db.query.filter_by(title = data['title']).first()
-    print(user_movie.movie_id)
-    print(user_movie.title)
-    print(user_movie.overview)
-    print(user_movie.rate)
-    user = User.query.filter_by(public_id = public_id).first()
-    user.user_movie_id = user_movie.movie_id 
-    user.user_overview = user_movie.overview
-    user.user_rate = data['rating']
-    user.user_title = user_movie.title
-    db.session.commit()
-    return jsonify({'message': 'User Information has been updated successfully'}), 201
-
-@app.route('/user/<public_id>/movies', methods = ['PUT'])
-def edit_movie_rating(public_id):
-    """
-    Allows the user to edit his own rating for a movie
-    """
-    data = request.get_json()
-    user = User.query.filter_by(public_id = public_id).first()
-    user.user_rate = data['rating']
-    db.session.commit()
-
+    movie_name = data['title']
+    search_movie_url = 'https://api.themoviedb.org/3/search/movie?api_key={}&query={}'.format(tmdb.api_key, movie_name)
+    search_movie_response = requests.get(search_movie_url).json()
     
 
 
+
+    return jsonify({'message':search_movie_response['results']})
+
+@app.route('/add', methods = ['POST'])
+@token_required
+def add_movie(current_user):
+    """
+    add movie to database by the movie's id and add your own user_rating to it 
+    Requires Authentication
+    """
+    data = request.get_json()
+    movie_id = data['id']
+    id_url = 'https://api.themoviedb.org/3/movie/{}?api_key={}'.format(movie_id, tmdb.api_key)
+    movie_id_response = requests.get(id_url).json()
+    movie_info = Movie(id = movie_id , title = movie_id_response['original_title'], overview = movie_id_response['overview'], user_rating = data['rate'],user_id = current_user.public_id, )
+    db.session.add(movie_info)
+    db.session.commit()  
+    print(movie_id_response['original_title'])
+    print(movie_id_response['overview'])
+    print(current_user.public_id)
+    return jsonify({'msg':movie_id_response})
+
+
+@app.route('/edit', methods = ['PUT'])
+@token_required
+def edit_user_rating(current_user):
+    data = request.get_json()
+    query = Movie.query.filter_by(id = data['id']).first() 
+    query.user_rating = data['rate']
+    db.session.commit()
+    return jsonify({'message': 'rating for movie ' + query.title +' has been updated with '+query.user_rating+' '})
+
+
+
+@app.route('/delete-movie', methods = ['DELETE'])
+@token_required
+def delete_movie(current_user):
+    data = request.get_json()
+    query = Movie.query.filter_by(id = data['id']).first()
+    db.session.delete(query)
+    db.session.commit()
+    return jsonify ({'message': 'The movie '+query.title+' has been deleted'})
+
+
+
+
+@app.route('/add', methods = ['GET'])
+#@token_required
+def user_movie_list():
+    query = Movie.query.all()
+    movies = []
+    for q in query:
+        movies.append({'id': q.id, 'title':q.title, 'overview':q.overview, 'user':q.user_id, 'user rating':q.user_rating})
+
+    return jsonify ({'data': movies})
 
 
 
