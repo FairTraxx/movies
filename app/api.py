@@ -67,7 +67,7 @@ def token_required(f):
         #To use this for any enpoint that requires verification simply use:
         #@token_required and add current_user to your fn parameters 
 
-    return decorated
+    return decorated 
 
 
 #user endpoints 
