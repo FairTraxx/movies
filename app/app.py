@@ -66,6 +66,7 @@ def token_required(f):
     return decorated
 
 
+#user endpoints 
 
 
 @app.route('/user', methods =['POST'])
@@ -73,7 +74,7 @@ def register_user():
     """
     Simply registers a user with a username and password.
     """
-    data = request.get_json() #gets the json response
+    data = request.get_json() 
     hashed_password = generate_password_hash(data['password'], method = 'sha256') #hashes passwords using sha256
     new_user = User(public_id=str(uuid.uuid4()), username = data['username'], password = hashed_password, admin = True)
     db.session.add(new_user)
@@ -89,24 +90,22 @@ def login():
     """
     auth = request.authorization 
 
-    if not auth or not auth.username or not auth.password:
+    if not auth or not auth.username or not auth.password: #if there is no authenticated user/pass throws an error
         return make_response('could not verify this user', 401, {'WWW-example-auth-URL':'Basic realm = "login required"'})
 
     user = User.query.filter_by(username = auth.username).first()
 
-    if not user:
+    if not user: #if user doesn't exist
         return jsonify({'message': ' no user found'})
 
     if check_password_hash(user.password, auth.password):
         token = jwt.encode({'public_id': user.public_id, 'expiration':str(datetime.datetime.utcnow() + datetime.timedelta(minutes=60))}, app.config['SECRET_KEY'])
-
+        #if user credientals are valid generates token for 60 mins
         return jsonify({'token': token.decode('UTF-8'),
         'message':'Token successfully generated, expiration time 60 minutes :) '
         })
     
     return make_response('could not verify this user', 401, {'WWW-example-auth-URL':'Basic realm = "login required"'})
-
-
 
 
 @app.route('/user/info/<public_id>', methods = ['PUT'])
@@ -133,8 +132,8 @@ def get_all_users(current_user): #ADMIN ONLY
     gets all users data, ADMIN ONLY
     Just so we can see the userbase we are working with here 
     """
-    #if not current_user.admin:
-    #    return jsonify({'message':'insufficient Admin privelleges'})
+    if not current_user.admin:
+        return jsonify({'message':'insufficient Admin privelleges'})
     
     users = User.query.all()
     output = [] 
@@ -150,29 +149,32 @@ def get_all_users(current_user): #ADMIN ONLY
         output.append(user_data)
     return jsonify({'users':output})
 
+#Movie endpoints
 
 @app.route('/movie', methods=['POST'])
-def add_movies():
+@token_required
+def add_movies(current_user):
     """
     This endpoint "feeds" data directly to my database from TMDb API 
-    to automate the process we go through a range of movie IDs (eg:from 1 to 500) and save their data respectively  
+    to automate the process we go through a range of movie IDs (eg:from 1 to 500) and save their data respectively 
+    The user has two options to add movies either from my database or from directly searching TMBd API for all movies there 
     """
     movie = Movie()
-    movieid=300
+    movieid=300  #sets a starting point to the range of movie IDs i will be adding from
     movies = []
     #popular = movie.popular()
-    while movieid <= 320:
-        movieid = movieid + 1   
-        popular = movie.details(movieid)
+    while movieid <= 320:  #movieIDs ending points
+        movieid = movieid + 1   #increments counter
+        popular = movie.details(movieid) #grabs movie details from TMDb
         #if not popular.title:
-        #    movieid = movieid + 1
+        #    movieid = movieid + 1 #sometimes no movie exists for the given ID on TMDb's database
         #else:
         popular = movie.details(movieid)
-        print(movieid)
+        #print(movieid)
         new_movie = Movie_db(movie_id = movieid, title= popular.title, overview = popular.overview, rate = popular.vote_average)
         movies.append({'id': movieid,'title':popular.title, 'overview':popular.overview, 'rate':popular.vote_average}) 
-        db.session.add(new_movie)
-        db.session.commit()
+        db.session.add(new_movie)  # Saves my movies list to the database
+        db.session.commit()  
     return jsonify({'movies':movies})    
 
 @app.route('/movie',methods = ['GET'])
@@ -187,11 +189,11 @@ def display_movies():
 
     return jsonify({'movies':movies})
 
-@app.route('/user/<public_id>/movies', methods = ['PUT'])
+@app.route('/user/<public_id>/movies', methods = ['POST'])
 def add_user_movies(public_id):
     """
-    User has the option to search the database using movie title, the movie is automatically added to their list
-    User also has the option to pass a "rating" for the movie in this endpoint
+    User has the option to search our own database using movie title, the movie is automatically added to their list
+    User also has the option to pass a "rating" for the movie in this endpoint for the given movie
     """
     data = request.get_json()
     user_movie = Movie_db.query.filter_by(title = data['title']).first()
@@ -206,6 +208,21 @@ def add_user_movies(public_id):
     user.user_title = user_movie.title
     db.session.commit()
     return jsonify({'message': 'User Information has been updated successfully'}), 201
+
+@app.route('/user/<public_id>/movies', methods = ['PUT'])
+def edit_movie_rating(public_id):
+    """
+    Allows the user to edit his own rating for a movie
+    """
+    data = request.get_json()
+    user = User.query.filter_by(public_id = public_id).first()
+    user.user_rate = data['rating']
+    db.session.commit()
+
+    
+
+
+
 
 
 
