@@ -10,8 +10,6 @@ import ssl
 import urllib.request as req
 import json
 import requests
-from flask_swagger import swagger
-from flask_swagger_ui import get_swaggerui_blueprint
 
 
 app = Flask(__name__)
@@ -251,15 +249,6 @@ def user_movie_list(current_user):
         movies.append({'id': q.id, 'title':q.title, 'overview':q.overview, 'user':q.user_id, 'user rating':q.user_rating})
 
     return jsonify ({'data': movies})
-
-
- #Documentation Swagger.
-@app.route("/")
-def spec():
-    return jsonify(swagger(app))   
-
-
-
 
 
 if __name__ == '__main__':
