@@ -122,7 +122,7 @@ def update_user_info(current_user, public_id):
     Info such as bio, must_watch, email... 
     """
     data = request.get_json()
-    user = User.query.filter_by(public_id = public_id).first() #filters user data by public id
+    user = User.query.filter_by(public_id =current_user.public_id).first() #filters user data by public id
     user.email = data['email'] #update email, bio must watch
     user.bio = data['bio']
     user.must_watch = data['must_watch']
