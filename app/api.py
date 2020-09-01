@@ -10,6 +10,8 @@ import ssl
 import urllib.request as req
 import json
 import requests
+from flask_swagger import swagger
+from flask_swagger_ui import get_swaggerui_blueprint
 
 
 app = Flask(__name__)
@@ -120,11 +122,10 @@ def update_user_info(current_user, public_id):
     Info such as bio, must_watch, email... 
     """
     data = request.get_json()
-    user = User.query.filter_by(public_id = public_id).first()
-    user.email = data['email']
+    user = User.query.filter_by(public_id = public_id).first() #filters user data by public id
+    user.email = data['email'] #update email, bio must watch
     user.bio = data['bio']
     user.must_watch = data['must_watch']
-    print(data)
     db.session.commit()
     return jsonify({'message': 'User Information has been updated successfully'}), 201
 
@@ -136,8 +137,8 @@ def get_all_users(current_user): #ADMIN ONLY
     gets all users data, ADMIN ONLY
     Just so we can see the userbase we are working with here 
     """
-    #if not current_user.admin:
-    #    return jsonify({'message':'insufficient Admin privelleges'})
+    if not current_user.admin:
+        return jsonify({'message':'insufficient Admin privelleges'})
     
     users = User.query.all()
     output = [] 
@@ -172,7 +173,8 @@ def tmdb_movies():
 @app.route('/search', methods = ['POST'])
 def search_movie():
     """
-    Search for the name of a movie from TMDb database 
+    Search for the name of a movie from TMDb database
+   (Authentication not required)
     """
     data = request.get_json()
     movie_name = data['title']
@@ -188,7 +190,7 @@ def search_movie():
 @token_required
 def add_movie(current_user):
     """
-    add movie to database by the movie's id and add your own user_rating to it 
+    add movie to database (user list) by the movie's id and add your own user rate to it 
     Requires Authentication
     """
     data = request.get_json()
@@ -198,15 +200,20 @@ def add_movie(current_user):
     movie_info = Movie(id = movie_id , title = movie_id_response['original_title'], overview = movie_id_response['overview'], user_rating = data['rate'],user_id = current_user.public_id, )
     db.session.add(movie_info)
     db.session.commit()  
-    print(movie_id_response['original_title'])
-    print(movie_id_response['overview'])
-    print(current_user.public_id)
-    return jsonify({'msg':movie_id_response})
+    #moviename = movie_id_response['original_title']
+    #print(movie_id_response['original_title'])
+    #print(movie_id_response['overview'])
+    #print(current_user.public_id)
+    return jsonify({'msg':'The movie ' +movie_id_response['original_title']+ ' has been added to your list'})
 
 
 @app.route('/edit', methods = ['PUT'])
 @token_required
 def edit_user_rating(current_user):
+    """
+    updates the user rating, takes in ID of the movie and the rate you want to update
+    Requires Authentication
+    """
     data = request.get_json()
     query = Movie.query.filter_by(id = data['id']).first() 
     query.user_rating = data['rate']
@@ -218,6 +225,10 @@ def edit_user_rating(current_user):
 @app.route('/delete-movie', methods = ['DELETE'])
 @token_required
 def delete_movie(current_user):
+    """
+    Deletes Movie from the user list
+    Requires Authentication
+    """
     data = request.get_json()
     query = Movie.query.filter_by(id = data['id']).first()
     db.session.delete(query)
@@ -228,14 +239,24 @@ def delete_movie(current_user):
 
 
 @app.route('/add', methods = ['GET'])
-#@token_required
-def user_movie_list():
+@token_required
+def user_movie_list(current_user):
+    """
+    Displays all movies in a User's movie List
+    Requires Authentication
+    """ 
     query = Movie.query.all()
     movies = []
     for q in query:
         movies.append({'id': q.id, 'title':q.title, 'overview':q.overview, 'user':q.user_id, 'user rating':q.user_rating})
 
     return jsonify ({'data': movies})
+
+
+ #Documentation Swagger.
+@app.route("/")
+def spec():
+    return jsonify(swagger(app))   
 
 
 
