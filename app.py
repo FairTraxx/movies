@@ -170,7 +170,7 @@ def tmdb_movies():
     return jsonify({'Discover Movies': movie_results_list})
 
 
-@app.route('/search', methods = ['POST'])
+@app.route('/search', methods = ['GET'])
 def search_movie():
     """
     Search for the name of a movie from TMDb database
