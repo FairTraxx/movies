@@ -1,6 +1,8 @@
 # Flask Movies API
 Documentation: https://documenter.getpostman.com/view/11720989/TVCe294L#ed30dfe6-6d6d-4508-91f5-3a6b1f4b34c9
 
+Also the api is deployed here: https://flask-movie-tmbd.herokuapp.com/
+
 ## Features: 
 
 1. Register and Login
