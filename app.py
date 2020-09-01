@@ -114,7 +114,7 @@ def login():
     return make_response('could not verify this user', 401, {'WWW-example-auth-URL':'Basic realm = "login required"'})
 
 
-@app.route('/user/info/<public_id>', methods = ['PUT'])
+@app.route('/user/info', methods = ['PUT'])
 @token_required
 def update_user_info(current_user, public_id):
     """
