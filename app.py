@@ -164,7 +164,6 @@ def tmdb_movies():
     connection = req.urlopen(base_url) 
     data = json.loads(connection.read())
     movie_results_list = data['results']
-
     return jsonify({'Discover Movies': movie_results_list})
 
 
@@ -178,10 +177,6 @@ def search_movie():
     movie_name = data['title']
     search_movie_url = 'https://api.themoviedb.org/3/search/movie?api_key={}&query={}'.format(tmdb.api_key, movie_name)
     search_movie_response = requests.get(search_movie_url).json()
-    
-
-
-
     return jsonify({'message':search_movie_response['results']})
 
 @app.route('/add', methods = ['POST'])
@@ -219,7 +214,6 @@ def edit_user_rating(current_user):
     return jsonify({'message': 'rating for movie ' + query.title +' has been updated with '+query.user_rating+' '})
 
 
-
 @app.route('/delete-movie', methods = ['DELETE'])
 @token_required
 def delete_movie(current_user):
@@ -232,8 +226,6 @@ def delete_movie(current_user):
     db.session.delete(query)
     db.session.commit()
     return jsonify ({'message': 'The movie '+query.title+' has been deleted'})
-
-
 
 
 @app.route('/add', methods = ['GET'])
