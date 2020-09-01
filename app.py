@@ -75,7 +75,7 @@ def token_required(f):
 #user endpoints 
 
 
-@app.route('/user', methods =['POST'])
+@app.route('/register', methods =['POST'])
 def register_user():
     """
     Simply registers a user with a username and password.
@@ -116,7 +116,7 @@ def login():
 
 @app.route('/user/info', methods = ['PUT'])
 @token_required
-def update_user_info(current_user, public_id):
+def update_user_info(current_user):
     """
     This endpoint enables the user to update his info after registering/logging in. 
     Info such as bio, must_watch, email... 
